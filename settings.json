@@ -1,0 +1,402 @@
+{
+  "dm_fact_attendant_pays": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,round_id,win_id,amt,CONVERT(NVARCHAR,player_id) AS player_id FROM fact_attendant_pays WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_attendant_pays",
+    "licensee_mode": false,
+    "rule_status": false,
+    "name": "dm_fact_attendant_pays",
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.licensee_id,r.round_id, r.jackpot_win_id AS win_id, wr.pc_jackpot_win_amt AS amt, CONVERT(r.player_id,NCHAR) AS player_id FROM rounds AS r LEFT JOIN wms_result_transactions wr ON r.round_id = wr.round_id LEFT JOIN properties p ON p.property_id = r.property_id WHERE r.att_paid_prog_payout_unlock_code IS NOT NULL AND r.updated_at BETWEEN %s AND %s UNION ALL SELECT p.licensee_id,r.round_id, r.win_id AS win_id, wr.payout_amt / 100 AS amt, r.player_id FROM rounds AS r LEFT JOIN wms_result_transactions wr ON r.round_id = wr.round_id LEFT JOIN properties p ON p.property_id = r.property_id WHERE r.att_paid_jps_unlock_code IS NOT NULL AND r.updated_at BETWEEN %s AND %s UNION ALL SELECT p.licensee_id,pr.round_id,JSON_UNQUOTE(JSON_EXTRACT(pr.data, '$.platform.jps_info.win_id')) AS win_id,wr.payout_amt / 100 AS amt, pgs.player_id FROM pinion_rounds pr LEFT JOIN wms_result_transactions wr ON pr.round_id = wr.round_id LEFT JOIN pinion_game_sessions pgs ON pr.game_session_id = pgs.game_session_id LEFT JOIN properties p ON p.property_id = pgs.property_id WHERE JSON_EXTRACT(pr.data, '$.platform.jps_info.att_paid') = TRUE AND pr.updated_at BETWEEN %s AND %s",
+    "src_table": "rounds,wms_result_transactions,pinion_rounds,pinion_game_sessions",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_igswms_handpay_fund_out": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,handpay_amt  FROM fact_handpay_fund_out where updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_handpay_fund_out",
+    "licensee_mode": false,
+    "rule_status": false,
+    "name": "dm_fact_igswms_handpay_fund_out",
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.licensee_id,ict.ref_trans_id, ict.handpay_amt/100 AS handpay_amt FROM igswms_cashier_transactions ict LEFT JOIN igswms_player_game_sessions ipgs ON ipgs.player_game_session_id = ict.player_game_session_id LEFT JOIN properties p ON p.property_id = ipgs.property_id WHERE ict.handpay_amt > 0 AND ict.updated_at BETWEEN %s AND %s",
+    "src_table": "igswms_cashier_transactions,igswms_player_game_sessions",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_meter_slot_wins": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,coin_in,coin_out FROM fact_meter_slot_wins WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_meter_slot_wins",
+    "licensee_mode": false,
+    "name": "dm_fact_meter_slot_wins",
+    "rule_status": true,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.licensee_id,wr.ref_trans_id,wr.bet_amt / 100 AS coin_in,IF(wr.payout_amt / 100 + wr.pc_jackpot_win_amt IS NULL, payout_amt / 100, wr.payout_amt / 100 + wr.pc_jackpot_win_amt) AS coin_out FROM wms_fund_transactions wf LEFT JOIN wms_result_transactions wr ON wf.transaction_id = wr.result_transaction_id LEFT JOIN properties AS p ON wf.property_id = p.property_id WHERE wf.transaction_type = 'result_transaction' AND wr.updated_at BETWEEN %s AND %s UNION SELECT p.licensee_id,irt.ref_trans_id,irt.bet_amt / 100 AS coin_in, IF(irt.payout_amt / 100 + irt.pc_jackpot_win_amt IS NULL, payout_amt / 100,irt.payout_amt / 100 + irt.pc_jackpot_win_amt) AS coin_out FROM igswms_result_transactions irt LEFT JOIN igswms_fund_transactions ift ON irt.result_transaction_id = ift.transaction_id LEFT JOIN properties AS p ON ift.property_id = p.property_id WHERE irt.updated_at BETWEEN %s AND %s",
+    "src_table": "wms_result_transactions,wms_fund_transactions,igswms_result_transactions,igswms_fund_transactions",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_progressive_jackpot_config_changes": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT jackpot_config_change_id FROM fact_progressive_jackpot_config_changes WHERE created_timestamp BETWEEN ? and ?",
+    "dst_table": "fact_progressive_jackpot_config_changes",
+    "licensee_mode": false,
+    "name": "dm_fact_progressive_jackpot_config_changes",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.change_log_id AS jackpot_config_change_id FROM jms_change_logs p LEFT JOIN jms_change_logs a ON p.aft_config_id = a.aft_config_id AND p.abort_count = a.abort_count AND a.`action` = 'approve' WHERE p.`action` IN ('publish') AND p.`change_type` IN ('JackpotConfig') AND p.created_at BETWEEN %s AND %s",
+    "src_table": "sm_change_histories",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_progressive_jackpot_counting_meter_logs": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,jackpot_counting_meter_log_id,contribute_amt FROM fact_progressive_jackpot_counting_meter_logs WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_progressive_jackpot_counting_meter_logs",
+    "licensee_mode": false,
+    "name": "dm_fact_progressive_jackpot_counting_meter_logs",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT ppt.licensee_id,jl.jackpot_counting_meter_log_id, jl.contribute_amt FROM rounds slr LEFT JOIN kili_jackpot_transactions jt ON slr.round_id = jt.round_id LEFT JOIN kili_jackpot_counting_meter_logs jl ON jt.jackpot_transaction_id = jl.jackpot_transaction_id LEFT JOIN properties ppt ON ppt.property_id = slr.property_id WHERE jt.jackpot_transaction_id IS NOT NULL AND jl.updated_at BETWEEN %s AND %s",
+    "src_table": "rounds,kili_jackpot_transactions,kili_jackpot_counting_meter_logs",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_progressive_jackpot_wins": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,jackpot_id,jackpot_win_id,jc_win_amt FROM fact_progressive_jackpot_wins WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_progressive_jackpot_wins",
+    "licensee_mode": false,
+    "name": "dm_fact_progressive_jackpot_wins",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.licensee_id,jwh.jackpot_id, jwh.jackpot_win_id, jwh.win_amt AS jc_win_amt FROM jackpot_win_histories jwh LEFT JOIN properties p ON jwh.property_id=p.property_id WHERE jwh.updated_at BETWEEN %s AND %s",
+    "src_table": "jackpot_win_histories",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_progressive_jackpots_from_slot": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,jackpot_logical_meter_id,contribute_amt,jackpot_meter FROM fact_progressive_jackpots WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_progressive_jackpots",
+    "licensee_mode": false,
+    "name": "dm_fact_progressive_jackpots_from_slot",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT ppt.licensee_id,lm.jackpot_logical_meter_id, lm.contribute_amt, lm.jackpot_meter FROM rounds r LEFT JOIN kili_jackpot_transactions jt ON r.round_id = jt.round_id LEFT JOIN kili_jackpot_logical_meters lm ON jt.jackpot_transaction_id = lm.jackpot_change_id LEFT JOIN properties ppt ON ppt.property_id = r.property_id WHERE  jt.round_id IS NOT NULL AND lm.updated_at BETWEEN %s AND %s UNION ALL SELECT ppt.licensee_id,lm.jackpot_logical_meter_id, 0 AS contribute_amt, lm.jackpot_meter FROM rounds r LEFT JOIN jackpot_win_histories jw ON r.round_id = jw.round_id LEFT JOIN kili_jackpot_logical_meters lm ON jw.jackpot_win_history_id = lm.jackpot_change_id LEFT JOIN properties ppt ON ppt.property_id = r.property_id WHERE  jw.round_id IS NOT NULL AND lm.updated_at BETWEEN %s AND %s",
+    "src_table": "rounds,kili_jackpot_transactions,kili_jackpot_logical_meters,jackpot_win_histories",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_slot_master_games": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,CAST(property_id AS nvarchar) AS property_id,CAST(game_id AS nvarchar) AS game_id,config_change_id FROM fact_slot_master_games WHERE created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_slot_master_games",
+    "licensee_mode": false,
+    "name": "dm_fact_slot_master_games",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.licensee_id,CAST(p.property_id AS NCHAR) AS property_id,CAST(s.game_id AS NCHAR) AS game_id,s.change_log_id AS config_change_id FROM pgms_change_logs s LEFT JOIN properties p ON s.property_id = p.property_id WHERE s.`action` = 'publish' AND (JSON_KEYS(JSON_EXTRACT(s.change_set, '$.after.configs.rtp')) IS NOT NULL OR JSON_KEYS(JSON_EXTRACT(s.change_set, '$.after.configs.denom_set')) IS NOT NULL OR JSON_EXTRACT(s.change_set, '$.after.configs.extra.min_bet_in_credit') IS NOT NULL OR JSON_EXTRACT(s.change_set, '$.after.configs.extra.max_bet_in_credit') IS NOT NULL) AND s.created_at BETWEEN %s AND %s",
+    "src_table": "pgms_change_logs",
+    "checking_period": [
+      30
+    ]
+  },
+  "dm_fact_slot_master_machines": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_id,status ,change_history_id FROM fact_slot_master_machines WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_slot_master_machines",
+    "licensee_mode": false,
+    "name": "dm_fact_slot_master_machines",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT p.licensee_id,ch.ref_id ,CASE WHEN ch.action='register' then 'active' WHEN ch.action='unregister' then 'inactive' END AS status ,ch.change_history_id FROM sm_change_histories ch LEFT JOIN properties p ON p.property_id = ch.property_id WHERE ch.object IN ('assign_location') AND ch.machine_type_id=2 AND ch.action IN ('register', 'unregister') AND ch.updated_at BETWEEN %s AND %s",
+    "src_table": "sm_change_histories",
+    "checking_period": [
+      30
+    ]
+  },
+  "horus_fact_cage_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,deposit,withdraw FROM fact_cage_deposit_withdrawals WHERE source_created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_cage_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "horus_fact_cage_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_ldm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),ref_trans_id)),2) as ref_trans_id,trans_type,deposit,withdraw from fact_cage_deposit_withdrawals WHERE created_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_cage_deposit_withdrawals",
+    "checking_period": [
+      30
+    ]
+  },
+  "horus_fact_epay_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,amt FROM fact_epay_deposit_withdrawals WHERE source_created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_epay_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "horus_fact_epay_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_ldm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),ref_trans_id)),2) as ref_trans_id,trans_type,amt FROM fact_epay_deposit_withdrawals WHERE created_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_epay_deposit_withdrawals",
+    "checking_period": [
+      30
+    ]
+  },
+  "horus_fact_kiosk_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,amt FROM fact_kiosk_deposit_withdrawals WHERE source_created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_kiosk_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "horus_fact_kiosk_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_ldm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR(128),HASHBYTES('MD5',convert(varchar(128),ref_trans_id)),2) AS ref_trans_id,trans_type,amt FROM fact_kiosk_deposit_withdrawals WHERE created_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_kiosk_deposit_withdrawals",
+    "checking_period": [
+      180
+    ]
+  },
+  "horus_fact_meter_slot_wins": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,coin_in,coin_out FROM fact_meter_slot_wins WHERE source_created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_meter_slot_wins",
+    "licensee_mode": false,
+    "name": "horus_fact_meter_slot_wins",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_dm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),ref_trans_id)),2) as ref_trans_id,coin_in,coin_out FROM fact_meter_slot_wins WHERE created_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_meter_slot_wins",
+    "checking_period": [
+      30
+    ]
+  },
+  "horus_fact_outlet_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,amt FROM fact_outlet_deposit_withdrawals WHERE source_created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_outlet_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "horus_fact_outlet_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_ldm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR(128),HASHBYTES('MD5',convert(varchar(128),ref_trans_id)),2) AS ref_trans_id,trans_type,amt FROM fact_outlet_deposit_withdrawals WHERE created_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_outlet_deposit_withdrawals",
+    "checking_period": [
+      30
+    ]
+  },
+  "horus_fact_player_rating": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,CONVERT(NVARCHAR,accounting_date_id) AS accounting_date_id,lobby_session_summary_id,ISNULL(player_game_session_id,'N/A') AS player_game_session_id,coin_in,coin_out FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
+    "dst_table": "fact_player_rating",
+    "licensee_mode": false,
+    "name": "horus_fact_player_rating",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_dm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR,accounting_date_id) AS accounting_date_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),lobby_session_summary_id)),2) AS lobby_session_summary_id, ISNULL((CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),player_game_session_id)),2)),'N/A') AS player_game_session_id, coin_in,coin_out FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
+    "src_table": "fact_player_rating",
+    "checking_period": [
+      30
+    ]
+  },
+  "horus_fact_promotion_transactions": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format horus_sub_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,amt FROM fact_promotion_transactions WHERE source_created_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_promotion_transactions",
+    "licensee_mode": false,
+    "name": "horus_fact_promotion_transactions",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_ldm_{this.ENV}",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),ref_trans_id)),2) as ref_trans_id,amt FROM fact_promotion_transactions WHERE created_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_promotion_transactions",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_cage_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,deposit,withdraw from fact_cage_deposit_withdrawals WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_cage_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "ldm_fact_cage_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT c.licensee_id,cpt.ref_trans_id,ctt.name AS trans_type,CASE WHEN ctt.name = 'deposit' THEN cpt.amt / 100 WHEN ctt.name = 'manual_deposit' THEN cpt.amt / 100 WHEN ctt.name = 'void_deposit' THEN cpt.amt / -100 ELSE 0 END AS deposit,CASE WHEN ctt.name = 'withdraw' THEN cpt.amt / 100 WHEN ctt.name = 'manual_withdraw' THEN cpt.amt / 100 WHEN ctt.name = 'void_withdraw' THEN cpt.amt / -100 ELSE 0 END AS withdraw FROM cms_player_transactions cpt LEFT JOIN casinos c ON c.casino_id = cpt.casino_id LEFT JOIN cms_trans_types ctt ON ctt.trans_type_id = cpt.trans_type_id AND ctt.name IN ('void_deposit', 'void_withdraw','deposit', 'withdraw','manual_deposit','manual_withdraw')WHERE cpt.system_user_id IS NOT NULL AND cpt.updated_at BETWEEN %s AND %s",
+    "src_table": "cms_player_transactions,cms_trans_types",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_exceptions": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,cage_ref_trans_id AS ref_trans_id, deposit_amt, withdrawal_amt FROM fact_exceptions WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_exceptions",
+    "licensee_mode": false,
+    "name": "ldm_fact_exceptions",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT c.licensee_id,cpt.ref_trans_id,CASE WHEN a.trans_type = 'deposit' THEN a.amt / 100 WHEN a.trans_type = 'manual_deposit' THEN a.amt / 100 ELSE 0 END AS deposit_amt,CASE WHEN a.trans_type = 'withdraw' THEN a.amt / 100 WHEN a.trans_type = 'manual_withdraw' THEN a.amt / 100 ELSE 0 END AS withdrawal_amt FROM cms_player_transactions cpt LEFT JOIN casinos c ON cpt.casino_id = c.casino_id JOIN cms_trans_types ctt ON cpt.trans_type_id = ctt.trans_type_id AND ctt.name IN ('void_withdraw', 'void_deposit') LEFT JOIN (SELECT cpt.ref_trans_id, cpt.amt, ctt.name AS trans_type FROM cms_player_transactions cpt JOIN cms_trans_types ctt ON cpt.trans_type_id = ctt.trans_type_id AND ctt.name IN ('withdraw', 'deposit', 'manual_deposit', 'manual_withdraw')) a ON a.ref_trans_id = cpt.ref_trans_id WHERE cpt.updated_at BETWEEN %s AND %s",
+    "src_table": "cms_player_transactions,cms_trans_types",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_liabilities": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,cash_ending_bal,credit_ending_bal FROM fact_liabilities WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_liabilities",
+    "licensee_mode": false,
+    "name": "ldm_fact_liabilities",
+    "rule_status": false,
+    "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "src_db": "@format anubis_ldm_{this.ENV}",
+    "src_query": "SELECT a.licensee_id,a.ref_trans_id,a.ending_bal AS cash_ending_bal,a.credit_ending_bal FROM fact_account_activities (nolock) AS a JOIN (SELECT player_id, licensee_id, accounting_date_id, MAX(seq) AS seq FROM fact_account_activities (nolock) GROUP BY player_id , licensee_id , accounting_date_id) AS b ON (a.player_id = b.player_id AND a.licensee_id = b.licensee_id AND a.accounting_date_id = b.accounting_date_id AND a.seq = b.seq) WHERE a.updated_timestamp BETWEEN ? AND ?",
+    "src_table": "fact_account_activities",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_promotion_credit_bet_transactions": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,amt AS credit_bet_amt FROM fact_promotion_credit_bet_transactions WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_promotion_credit_bet_transactions",
+    "licensee_mode": false,
+    "name": "ldm_fact_promotion_credit_bet_transactions",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT rt.licensee_id,rt.ref_trans_id, rt.credit_bet_amt/100 AS credit_bet_amt FROM cwms_round_transactions rt WHERE rt.trans_type IN ('bet', 'cancel bet') AND rt.credit_bet_amt <> 0 AND rt.aasm_state='completed' AND rt.updated_at BETWEEN %s AND %s",
+    "src_table": "cwms_round_transactions",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_kiosk_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,amt FROM fact_kiosk_deposit_withdrawals WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_kiosk_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "ldm_fact_kiosk_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT c.licensee_id,ckt.ref_trans_id, ctt.name AS trans_type, CASE WHEN ctt.name IN ('deposit', 'withdraw') THEN ckt.amt / 100 WHEN ctt.name IN ('void_deposit', 'void_withdraw') THEN ckt.amt / -100 END AS amt FROM cms_kiosk_transactions_completed ckt LEFT JOIN cms_trans_types ctt ON ckt.trans_type_id = ctt.trans_type_id LEFT JOIN casinos c ON ckt.casino_id = c.casino_id WHERE ctt.name IN ('deposit', 'withdraw', 'void_deposit', 'void_withdraw') AND ckt.updated_at BETWEEN %s AND %s",
+    "src_table": "cms_kiosk_transactions_completed,cms_trans_types",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_epay_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,amt FROM fact_epay_deposit_withdrawals WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_epay_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "ldm_fact_epay_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT c.licensee_id, cet.ref_trans_id, cet.amt / 100 AS amt FROM cms_epay_transactions cet LEFT JOIN cms_trans_types ct ON cet.trans_type_id = ct.trans_type_id LEFT JOIN casinos c ON cet.casino_id = c.casino_id WHERE cet.updated_at BETWEEN %s AND %s",
+    "src_table": "cms_epay_transactions,cms_trans_types",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_outlet_deposit_withdrawals": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id, amt FROM fact_outlet_deposit_withdrawals WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_outlet_deposit_withdrawals",
+    "licensee_mode": false,
+    "name": "ldm_fact_outlet_deposit_withdrawals",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT c.licensee_id, pt.ref_trans_id, pt.amount / 100 AS amt FROM coms_player_transactions pt LEFT JOIN casinos c ON c.casino_id = pt.casino_id WHERE pt.updated_at BETWEEN %s AND %s AND pt.status = 'completed'",
+    "src_table": "coms_player_transactions",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_bcf_transactions": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,bcf_transaction_id, amt FROM fact_bcf_transactions WHERE updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_bcf_transactions",
+    "licensee_mode": false,
+    "name": "ldm_fact_bcf_transactions",
+    "rule_status": false,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT c.licensee_id, bct.bcf_transaction_id, bct.amount/100 AS amt FROM bcf_transactions bct LEFT JOIN casinos c ON c.casino_id = bct.casino_id WHERE bct.updated_at BETWEEN %s AND %s AND bct.status = 'completed'",
+    "src_table": "bcf_transactions",
+    "checking_period": [
+      30
+    ]
+  },
+  "ldm_fact_account_activities": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_ldm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_ldm_{this.ENV}",
+    "dst_query": "SELECT licensee_id,ref_trans_id,trans_type,amt FROM fact_account_activities where updated_timestamp BETWEEN ? AND ?",
+    "dst_table": "fact_account_activities",
+    "licensee_mode": false,
+    "name": "ldm_fact_account_activities",
+    "rule_status": true,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND LEFT(ct.trans_type, 5) = 'auto_' AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND ct.source_type = 'paynet' AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE RIGHT(ct.source_type, 6) = '_kiosk' AND ct.aasm_state = 'completed' AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND ct.source_type IN ('cage_transaction', 'cage_manual_transaction', 'promotion_deposit') AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND ct.source_type = 'in_game_session_transaction' AND ct.updated_at BETWEEN %s AND %s UNION SELECT rt.licensee_id, rt.ref_trans_id, rt.trans_type, IF(trans_type = 'result', IF(jp_direct_pay = 1 && pc_jp_win_amt IS NOT NULL, CONVERT(payout_amt / 100, DECIMAL(25, 10)) + pc_jp_win_amt, payout_amt / 100), bet_amt / 100) AS amt FROM cwms_round_transactions rt WHERE rt.aasm_state = 'completed' AND rt.updated_at BETWEEN %s AND %s",
+    "src_table": "cwms_cashier_transactions,cwms_round_transactions",
+    "checking_period": [
+      30
+    ]
+  }
+}

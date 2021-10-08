@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;}
+.tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg .tg-baqh{text-align:center;vertical-align:top}
+.tg .tg-0lax{text-align:left;vertical-align:top}
+</style>
+    <title>DQC - Found unmatched Rows</title>
+</head>
+<body>
+<p> ETL name: {{name}}</p>
+<p> Event_id: {{event_id}}</p>
+<p> Detected at: {{time}} UTC</p>
+<p> Checking period: {{start_time}} UTC ~ {{end_time}} UTC </p>
+{% if src_unique_dict %}
+    <p> Dest table missing below data: </p>
+    <table class="tg">
+    <thead>
+      <tr>
+        {% for i in src_unique_dict['columns'] %}
+        <th class="tg-baqh">{{i}}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in src_unique_dict['data'] %}
+      <tr>
+        {% for j in i %}
+        <td class="tg-0lax">{{j}}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+    </table>
+{% endif %}
+
+{% if dst_unique_dict %}
+    <p> Source table missing below data: </p>
+    <table class="tg">
+    <thead>
+      <tr>
+        {% for i in dst_unique_dict['columns'] %}
+        <th class="tg-baqh">{{i}}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in dst_unique_dict['data'] %}
+      <tr>
+        {% for j in i %}
+        <td class="tg-0lax">{{j}}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+    </table>
+{% endif %}
+</body>
+</html>
+

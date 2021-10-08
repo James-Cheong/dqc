@@ -1,0 +1,10 @@
+version: '3'
+services:
+  app:
+    image: "dqc:${TAG}"
+    container_name: dqc
+    build: ./
+    env_file:
+      - .env
+    volumes:
+      - .:/app/log
