@@ -5,9 +5,10 @@ FROM python:3.9.7-buster
 WORKDIR /app
 
 # copy the dependencies file to the working directory
-COPY main.py requirements.txt settings.json /app/
-COPY DQC /app/DQC
-COPY templates /app/templates
+#COPY main.py requirements.txt settings.json /app/
+#COPY DQC /app/DQC
+#COPY templates /app/templates
+ADD . /app
 
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
     && curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list \

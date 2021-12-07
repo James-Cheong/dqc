@@ -1,3 +1,4 @@
+import sys
 from time import process_time
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine, select, delete
@@ -40,10 +41,6 @@ def render_template(**kwargs):
     return template.render(**kwargs)
 
 
-now = datetime.utcnow()
-cut_off = now - timedelta(hours=now.hour, minutes=now.minute, seconds=now.second,
-                          microseconds=now.microsecond)  # using today's 00:00:00 as cut off time
-
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -64,10 +61,14 @@ class Connector:
         self.dst_table = etl.dst_table
         self.src_sql = etl.src_query
         self.dst_sql = etl.dst_query
-        # the desired time duration for data need to be checked
+        # the desired time range for data need to be checked
         self.checking_period = settings.checking_period if settings.checking_period else etl.checking_period
         self.rule_status = settings.rule_status if settings.rule_status is True else etl.rule_status
         self.licensee_mode = etl.licensee_mode
+        # using today's 00:00:00 as cut off time
+        self.cut_off = datetime.utcnow() - timedelta(hours=datetime.utcnow().hour, minutes=datetime.utcnow().minute,
+                                                     seconds=datetime.utcnow().second,
+                                                     microseconds=datetime.utcnow().microsecond)
 
     def validate(self):
         self.src_engine.connect()
@@ -92,7 +93,7 @@ class Connector:
             uid = uuid.uuid1().hex.upper()
             event = Event(rid=uid, type=dqc_type, etl_name=self.name, opened_at=datetime.utcnow(),
                           checking_period=checking_period_,
-                          data_start_time=cut_off - timedelta(days=checking_period_), data_end_time=cut_off)
+                          data_start_time=self.cut_off - timedelta(days=checking_period_), data_end_time=self.cut_off)
             self.session.add(event)
             self.session.commit()
             return uid
@@ -100,15 +101,17 @@ class Connector:
     @measure
     def generate_df(self, checking_period_):
         src_times = self.src_sql.count('%s') // 2 if '%s' in self.src_sql else self.src_sql.count('?') // 2
-        src_params = ((cut_off - timedelta(days=checking_period_)), cut_off) * src_times
-        dst_params = ((cut_off - timedelta(days=checking_period_)), cut_off)
+        src_params = ((self.cut_off - timedelta(days=checking_period_)), self.cut_off) * src_times
+        dst_params = ((self.cut_off - timedelta(days=checking_period_)), self.cut_off)
         src_table_df = pd.read_sql_query(self.src_sql, self.src_engine, params=src_params)
         dst_table_df = pd.read_sql_query(self.dst_sql, self.dst_engine, params=dst_params)
         if 'licensee_id' in dst_table_df.columns:
             src_table_df = src_table_df.astype({'licensee_id': 'object'})
             dst_table_df = dst_table_df.astype({'licensee_id': 'object'})
         logging.debug(src_table_df)
+        logging.debug(f'src_table_df: {sys.getsizeof(src_table_df)/1024/1024} MB')
         logging.debug(dst_table_df)
+        logging.debug(f'dst_table_df: {sys.getsizeof(dst_table_df)/1024/1024} MB')
         return src_table_df, dst_table_df
 
     @staticmethod
@@ -197,8 +200,8 @@ class Connector:
         src_unique_dict = src_unique_rows.to_dict('split') if not src_unique_rows.empty else None
         dst_unique_dict = dst_unique_rows.to_dict('split') if not dst_unique_rows.empty else None
 
-        start_time = cut_off - timedelta(days=checking_period_)
-        end_time = cut_off
+        start_time = self.cut_off - timedelta(days=checking_period_)
+        end_time = self.cut_off
         data = {'name': self.name, 'time': datetime.utcnow(), 'event_id': uid, 'src_query': self.src_sql,
                 'dst_query': self.dst_sql,
                 'start_time': start_time,
@@ -225,7 +228,7 @@ class Connector:
     def purge_data(self):
         if settings.DEBUG is False:
             ids = self.session.execute(
-                select(Event.rid).where(Event.opened_at < cut_off - timedelta(days=settings.retention_period)))
+                select(Event.rid).where(Event.opened_at < self.cut_off - timedelta(days=settings.retention_period)))
             for row in ids.scalars().all():
                 self.session.execute(delete(Result).where(Result.event_id == row))
                 self.session.execute(delete(Status).where(Status.event_id == row))

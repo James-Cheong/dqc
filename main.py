@@ -12,6 +12,8 @@ def job():
         logging.debug(connector.rule_status)
         if connector.rule_status:
             try:
+                logging.info(
+                    '----------------------------------------------------------------------------------------------')
                 logging.info(f'Checking {connector.name}...')
                 connector.validate()
                 for i in connector.checking_period:
@@ -49,7 +51,7 @@ def job():
 
 if __name__ == '__main__':
     job()
-    schedule.every(1).days.do(job)
+    schedule.every(settings.FREQUENCY).hours.do(job)
 
     while True:
         schedule.run_pending()

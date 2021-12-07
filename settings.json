@@ -38,7 +38,7 @@
     "dst_table": "fact_meter_slot_wins",
     "licensee_mode": false,
     "name": "dm_fact_meter_slot_wins",
-    "rule_status": true,
+    "rule_status": false,
     "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
     "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
     "src_query": "SELECT p.licensee_id,wr.ref_trans_id,wr.bet_amt / 100 AS coin_in,IF(wr.payout_amt / 100 + wr.pc_jackpot_win_amt IS NULL, payout_amt / 100, wr.payout_amt / 100 + wr.pc_jackpot_win_amt) AS coin_out FROM wms_fund_transactions wf LEFT JOIN wms_result_transactions wr ON wf.transaction_id = wr.result_transaction_id LEFT JOIN properties AS p ON wf.property_id = p.property_id WHERE wf.transaction_type = 'result_transaction' AND wr.updated_at BETWEEN %s AND %s UNION SELECT p.licensee_id,irt.ref_trans_id,irt.bet_amt / 100 AS coin_in, IF(irt.payout_amt / 100 + irt.pc_jackpot_win_amt IS NULL, payout_amt / 100,irt.payout_amt / 100 + irt.pc_jackpot_win_amt) AS coin_out FROM igswms_result_transactions irt LEFT JOIN igswms_fund_transactions ift ON irt.result_transaction_id = ift.transaction_id LEFT JOIN properties AS p ON ift.property_id = p.property_id WHERE irt.updated_at BETWEEN %s AND %s",
@@ -114,14 +114,14 @@
   "dm_fact_slot_master_games": {
     "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
     "dst_db": "@format anubis_dm_{this.ENV}",
-    "dst_query": "SELECT licensee_id,CAST(property_id AS nvarchar) AS property_id,CAST(game_id AS nvarchar) AS game_id,config_change_id FROM fact_slot_master_games WHERE created_timestamp BETWEEN ? AND ?",
+    "dst_query": "SELECT licensee_id,CAST(property_id AS nvarchar) AS property_id,CAST(game_id AS nvarchar) AS game_id,denom_config,config_change_id FROM fact_slot_master_games WHERE created_timestamp BETWEEN ? AND ?",
     "dst_table": "fact_slot_master_games",
     "licensee_mode": false,
     "name": "dm_fact_slot_master_games",
     "rule_status": false,
     "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
     "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
-    "src_query": "SELECT p.licensee_id,CAST(p.property_id AS NCHAR) AS property_id,CAST(s.game_id AS NCHAR) AS game_id,s.change_log_id AS config_change_id FROM pgms_change_logs s LEFT JOIN properties p ON s.property_id = p.property_id WHERE s.`action` = 'publish' AND (JSON_KEYS(JSON_EXTRACT(s.change_set, '$.after.configs.rtp')) IS NOT NULL OR JSON_KEYS(JSON_EXTRACT(s.change_set, '$.after.configs.denom_set')) IS NOT NULL OR JSON_EXTRACT(s.change_set, '$.after.configs.extra.min_bet_in_credit') IS NOT NULL OR JSON_EXTRACT(s.change_set, '$.after.configs.extra.max_bet_in_credit') IS NOT NULL) AND s.created_at BETWEEN %s AND %s",
+    "src_query": "WITH denom_configs AS (SELECT a.change_log_id, JSON_EXTRACT(JSON_KEYS(aft_denom_configs), CONCAT('$[', b.n, ']')) AS denom_config FROM pgms_change_logs a LEFT JOIN numbers b ON b.n < JSON_LENGTH(JSON_KEYS(aft_denom_configs))WHERE change_set -> '$.after.configs.denom_configs' IS NOT NULL) SELECT p.licensee_id,CAST(p.property_id AS NCHAR) AS property_id,CAST(s.game_id AS NCHAR) AS game_id,JSON_UNQUOTE(dc.denom_config) AS denom_config,s.change_log_id AS config_change_id FROM pgms_change_logs s LEFT JOIN properties p ON s.property_id = p.property_id LEFT JOIN denom_configs dc ON s.change_log_id = dc.change_log_id WHERE s.`action` = 'publish' AND (s.change_set -> '$.after.configs.rtp.value.display' IS NOT NULL OR s.change_set -> '$.after.configs.denom_set.value' IS NOT NULL OR s.change_set -> '$.after.configs.extra.min_bet_in_credit' IS NOT NULL OR s.change_set -> '$.after.configs.extra.max_bet_in_credit' IS NOT NULL OR JSON_LENGTH(change_set -> '$.after.configs.denom_configs') != 0) AND s.created_at BETWEEN %s AND %s",
     "src_table": "pgms_change_logs",
     "checking_period": [
       30
@@ -226,14 +226,14 @@
   "horus_fact_player_rating": {
     "dst_connection_string": "@format mssql+pyodbc://{this.HORUS_USER}:{this.HORUS_PASSWORD}@hq-prd-bi-db01/horus_sub_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
     "dst_db": "@format horus_sub_{this.ENV}",
-    "dst_query": "SELECT licensee_id,CONVERT(NVARCHAR,accounting_date_id) AS accounting_date_id,lobby_session_summary_id,ISNULL(player_game_session_id,'N/A') AS player_game_session_id,coin_in,coin_out FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
+    "dst_query": "SELECT licensee_id,CONVERT(NVARCHAR,accounting_date_id) AS accounting_date_id,lobby_session_summary_id,ISNULL(player_game_session_id,'N/A') AS player_game_session_id,ISNULL(coin_in,0) AS coin_in,ISNULL(coin_out,0) AS coin_out FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
     "dst_table": "fact_player_rating",
     "licensee_mode": false,
     "name": "horus_fact_player_rating",
     "rule_status": false,
     "src_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
     "src_db": "@format anubis_dm_{this.ENV}",
-    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR,accounting_date_id) AS accounting_date_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),lobby_session_summary_id)),2) AS lobby_session_summary_id, ISNULL((CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),player_game_session_id)),2)),'N/A') AS player_game_session_id, coin_in,coin_out FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
+    "src_query": "SELECT licensee_id,CONVERT(NVARCHAR,accounting_date_id) AS accounting_date_id,CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),lobby_session_summary_id)),2) AS lobby_session_summary_id, ISNULL((CONVERT(NVARCHAR(128),HASHBYTES( 'MD5', convert(varchar(128),player_game_session_id)),2)),'N/A') AS player_game_session_id, ISNULL(coin_in,0) AS coin_in,ISNULL(coin_out,0) AS coin_out FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
     "src_table": "fact_player_rating",
     "checking_period": [
       30
@@ -396,7 +396,23 @@
     "src_query": "SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND LEFT(ct.trans_type, 5) = 'auto_' AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND ct.source_type = 'paynet' AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE RIGHT(ct.source_type, 6) = '_kiosk' AND ct.aasm_state = 'completed' AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND ct.source_type IN ('cage_transaction', 'cage_manual_transaction', 'promotion_deposit') AND ct.updated_at BETWEEN %s AND %s UNION SELECT ct.licensee_id, ct.ref_trans_id, ct.trans_type, ct.amt / 100 AS amt FROM cwms_cashier_transactions ct WHERE ct.aasm_state = 'completed' AND ct.source_type = 'in_game_session_transaction' AND ct.updated_at BETWEEN %s AND %s UNION SELECT rt.licensee_id, rt.ref_trans_id, rt.trans_type, IF(trans_type = 'result', IF(jp_direct_pay = 1 && pc_jp_win_amt IS NOT NULL, CONVERT(payout_amt / 100, DECIMAL(25, 10)) + pc_jp_win_amt, payout_amt / 100), bet_amt / 100) AS amt FROM cwms_round_transactions rt WHERE rt.aasm_state = 'completed' AND rt.updated_at BETWEEN %s AND %s",
     "src_table": "cwms_cashier_transactions,cwms_round_transactions",
     "checking_period": [
-      30
+      1
+    ]
+  },
+  "dm_fact_player_rating": {
+    "dst_connection_string": "@format mssql+pyodbc://{this.SQLSRV_USER}:{this.SQLSRV_PASSWORD}@{this.SQLSRV_HOST}/anubis_dm_{this.ENV}?driver=ODBC+Driver+17+for+SQL+Server",
+    "dst_db": "@format anubis_dm_{this.ENV}",
+    "dst_query": "SELECT lobby_session_summary_id,player_game_session_id,rating_started_at,ISNULL(spin_count,0) AS spin_count FROM fact_player_rating WHERE rating_started_at BETWEEN ? AND ?",
+    "dst_table": "fact_player_rating",
+    "licensee_mode": false,
+    "name": "dm_fact_player_rating",
+    "rule_status": true,
+    "src_connection_string": "@format mysql+pymysql://{this.MYSQL_USER}:{this.MYSQL_PASSWORD}@{this.MYSQL_HOST}/aino_opsta_{this.MYSQL_ENV}",
+    "src_db": "@format aino_opsta_{this.MYSQL_ENV}",
+    "src_query": "SELECT wr.lobby_session_summary_id, wr.player_game_session_id, lss.started_at AS rating_started_at, COUNT(*) AS spin_count FROM lobby_session_summaries AS lss JOIN wms_result_transactions AS wr ON lss.lobby_session_summary_id = wr.lobby_session_summary_id JOIN player_game_sessions AS pgs ON wr.player_game_session_id = pgs.player_game_session_id JOIN rounds AS r ON wr.round_id = r.round_id JOIN game_sessions AS gs ON r.game_session_id = gs.game_session_id WHERE lss.started_at BETWEEN %s AND %s GROUP BY wr.lobby_session_summary_id, wr.game_id, wr.player_game_session_id,JSON_UNQUOTE(JSON_EXTRACT(gs.property_game_config, '$.configs.rtp.name'))UNION ALL SELECT lss.lobby_session_summary_id, NULL AS player_game_session_id, lss.started_at AS rating_started_at, 0 AS spin_count FROM lobby_session_summaries AS lss LEFT JOIN wms_result_transactions AS wr ON lss.lobby_session_summary_id = wr.lobby_session_summary_id LEFT JOIN properties p ON lss.property_id = p.property_id WHERE wr.lobby_session_summary_id IS NULL AND lss.started_at BETWEEN %s AND %s UNION ALL SELECT wr.lobby_session_summary_id, wr.player_game_session_id, lss.started_at AS rating_started_at, COUNT(*) AS spin_count FROM lobby_session_summaries AS lss JOIN wms_result_transactions AS wr ON lss.lobby_session_summary_id = wr.lobby_session_summary_id JOIN player_game_sessions AS pgs ON wr.player_game_session_id = pgs.player_game_session_id JOIN pinion_rounds AS r ON wr.round_id = r.round_id JOIN pinion_game_sessions AS gs ON r.game_session_id = gs.game_session_id WHERE lss.started_at BETWEEN %s AND %s GROUP BY wr.lobby_session_summary_id, wr.game_id, wr.player_game_session_id,JSON_UNQUOTE(JSON_EXTRACT(gs.property_game_config, '$.config.property_game_config.configs.rtp.name'))",
+    "src_table": "lobby_session_summaries,wms_result_transactions,player_game_sessions",
+    "checking_period": [
+      3
     ]
   }
 }
